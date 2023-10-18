@@ -7,16 +7,41 @@ class Connection {
         this.role = role;
         this.data = {};
         this.state = "waiting";
-        this.id = uuid.v4();
+        this.id = uuid.v4(); // Generate a unique id for this connection
 
-        this.ws.on("message", this.onmessage.bind(this));
+        // Bucket for handling rate limiting
+        this.maxBucketCount = 20; // Max msgs to be sent in the given timeframe (at most)
+        this.bucketTimeframe = 100; // Rate at which bucket regenerates
+        this.bucketCount = this.maxBucketCount; // Regerates bucket every x ms; dictated by bucketTimeFrame
+        // Bucket warns will increase every time connection is rate limited
+        // and will reset every 5s - Connection is kicked if this hits 3
+        this.bucketWarns = 0;
+
+        // Websocket bindings
+        this.ws.on("message", this.internalMessage.bind(this));
         this.ws.on("open", this.onopen.bind(this));
         this.ws.on("close", this.onclose.bind(this));
         this.ws.on("close", function() { this.state = "closed"; });
 
-        setTimeout(function() {
-            if (this.state == "waiting") this.kill("Auth not provided in time", "authTimeout");
-        }.bind(this), 2000);
+        setInterval(function() { if (this.bucketCount < this.maxBucketCount) this.bucketCount++ }.bind(this), this.bucketTimeframe);
+        setInterval(function() { this.bucketWarns = 0 }.bind(this), 5000);
+    };
+
+    internalMessage(msg) { // Handle checking JSON syntax of message
+        if (this.bucketCount <= 0) {
+            if (this.bucketWarns >= 2) {
+                return this.kill("Rate limit exceeded", "rateExceeded");
+            };
+            this.bucketWarns++;
+            return this.ws.send(JSON.stringify({ success: false, event: "unknown", error: { msg: "Rate limit reached", code: "rateLimited" } }));
+        };
+        this.bucketCount--;
+        try {
+            let newMsg = JSON.parse(msg.toString());
+            this.onmessage(newMsg);
+        } catch {
+            this.kill("Failed to parse message as JSON", "invalidJSON");
+        };
     };
 
     setData(data) {
@@ -25,15 +50,20 @@ class Connection {
         this.state = "validating";
     };
 
-    send(from = "system", data = {}) {
-        this.ws.send(JSON.stringify({ from: from, data: data }));
+    send(from="system", data={}, id=null) {
+        if (this.state == "killed" || this.state == "closed") return;
+        if (id) {
+            this.ws.send(JSON.stringify({ from: from, id: id, data: data }));
+        } else {
+            this.ws.send(JSON.stringify({ from: from, data: data }));
+        };
     };
 
     kill(reason, code) {
         if (this.state == "killed") return;
         this.room.connections = this.room.connections.filter((connection) => connection !== this);
         this.state = "killed";
-        this.send("system", { event: "kicked", reason: { msg: reason || "Unknown", code: code || "unknown" } });
+        this.send("system", { event: "disconnected", reason: { msg: reason || "Unknown", code: code || "unknown" } });
         this.ws.close();
     };
 
@@ -48,7 +78,6 @@ class Host extends Connection {
     };
 
     onmessage(msg) {
-        msg = JSON.parse(msg.toString());
         if (this.state == "waiting") {
             if (msg.auth && msg.appID) {
                 if (msg.auth == this.room.auth) { // Check if provided auth is the same as the room auth
@@ -57,19 +86,31 @@ class Host extends Connection {
                     this.room.state = "validated";
                     this.room.password = msg.password;
                     this.room.appID = msg.appID;
-                    console.log("Host has verified room!");
+                    console.log(`Room #${this.room.id} validated.`);
                 } else {
                     this.ws.send(JSON.stringify({ success: false, event: "authenticate", error: { msg: "Provided auth does not match room auth", code: "authMismatch" } }));
                 };
             } else { // auth or appID was not sent
                 this.ws.send(JSON.stringify({ success: false, event: "authenticate", error: { msg: "Either auth key or appID (or both) weren't provided", code: "missingRequired" } }));
             };
+        } else if (this.state == "validated") {
+            if (msg.to) {
+                switch (msg.to) {
+                    case "system":
+                        this.ws.send(JSON.stringify({ success: true, event: "message" }));
+                        break;
+                    default:
+                        if (msg.to)
+                        this.ws.send(JSON.stringify({ success: true, event: "message" }));
+                };
+            } else {
+                this.ws.send(JSON.stringify({ success: false, event: "message", error: { msg: "Missing 'to' key (should be 'system' or a client id)", code: "missingReciever" } }));
+            };
         };
     };
 
     onclose() {
-        this.room.sendExcluding([this], "system", { event: "disconnect", target: "host" });
-        this.room.close(); // Close due to host disconnect
+        this.room.close("Host disconnected", "hostDisconnect"); // Close due to host disconnect
     };
 };
 
@@ -79,18 +120,28 @@ class Client extends Connection {
     };
 
     onmessage(msg) {
-        msg = JSON.parse(msg.toString());
         if (this.state == "waiting") {
-            if (msg.appID && msg.appID == this.room.appID && (!msg.password || !this.room.password || msg.password == this.room.password)) {
+            let validAppID = msg.appID && msg.appID == this.room.appID;
+            let validPassword = !this.room.password || (msg.password && this.room.password) && msg.password == this.room.password;
+            if (validAppID && validPassword) {
                 this.state = "authenticated";
+                this.room.host.send("system", { event: "join", id: this.id });
                 this.ws.send(JSON.stringify({ success: true, event: "authenticate" }));
-            } else if (!msg.appID || msg.appID != this.room.appID) {
+            } else if (!validAppID) {
                 this.ws.send(JSON.stringify({ success: false, event: "authenticate", error: { msg: "appID doesn't match", code: "appIDMismatch" } }));
-            } else if (this.room.password && (!msg.password || msg.password != this.room.password)) {
+            } else if (!validPassword) {
                 this.ws.send(JSON.stringify({ success: false, event: "authenticate", error: { msg: "Password is incorrect", code: "invalidPassword" } }));
             } else {
                 this.ws.send(JSON.stringify({ success: false, event: "authenticate", error: { msg: "Unexpected authentication fail", code: "authFailed" } }));
             };
+        } else {
+            this.room.host.send("client", msg, this.id);
+        };
+    };
+
+    onclose() {
+        if (this.state != "waiting") {
+            this.room.host.send("system", { event: "disconnect", id: this.id });
         };
     };
 };
@@ -121,7 +172,7 @@ class Room {
     };
 
     sendExcluding(ignore, from = "system", data = {}) {
-        this.connections.filter((val) => {return !ignore.includes(val)}).forEach((connection) => {
+        this.connections.filter((val) => { return !ignore.includes(val) }).forEach((connection) => {
             connection.send(from, data);
         });
     };
@@ -132,12 +183,22 @@ class Room {
         });
     };
 
+    findConnection(id) {
+        let found = this.connections.filter((connection) => { return connection.id == id });
+        if (found.length != 1) {
+            return null; // Either none or too many connections were found
+        };
+        return found[0];
+    };
+
     addConnection(connection) {
         this.connections.push(connection);
         return connection;
     };
 
-    close() {
+    close(reason, code) {
+        console.log(`Room #${this.id} closed: ${code}.`);
+        this.connections.forEach((val) => { val.kill(reason, code); });
         this.handler.destroyRoom(this.id);
     };
 };

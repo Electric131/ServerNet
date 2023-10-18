@@ -10,8 +10,8 @@ app.use(express.static(path.join(__dirname, '/public')));
 
 var roomHandler = new RoomHandler();
 app.post("/newRoom/", (req, res) => {
-    console.log("new room requested");
     let room = roomHandler.newRoom();
+    console.log(`Room #${room.id} opened.`);
     res.send({
         id: room.id,
         auth: room.auth,
@@ -33,7 +33,7 @@ wss.on("connection", async function (ws, req) {
         return;
     };
     // Tell client syntax as well as auto kick time if it doesn't provide connection information.
-    ws.send(JSON.stringify({ event: "connect", info: "All messages will be in JSON syntax. Provide connection information to finalize connection.", autokick: Date.now() + 2000 }));
+    ws.send(JSON.stringify({ success: true, event: "connect", info: "All messages will be in JSON syntax. Provide connection information to finalize connection.", autokick: Date.now() + 2000 }));
     let room = roomHandler.getRoom(parseInt(url));
     let connection = null;
     if (!room.host) {
@@ -50,40 +50,6 @@ wss.on("connection", async function (ws, req) {
         ws.send(JSON.stringify({ success: true, event: "join", role: "client", info: "Ready for authentication." }));
     };
     if (!connection) { ws.send(JSON.stringify({ success: false, event: "join", error: { msg: "Connection failed for unknown reason", code: "unknownFailure" } })); ws.close(); return; };
-    // ws.on('message', function (message) {
-    //     try {
-    //         var data = JSON.parse(message.toString());
-    //         try {
-    //             if (room.state == "waiting") { // Room is waiting authentication
-    //                 // Requires 'auth' key
-    //                 if (!data.auth) {
-    //                     ws.send(JSON.stringify({ success: false, error: "'auth' required" }));
-    //                     ws.close();
-    //                     return;
-    //                 };
-    //                 if (data.auth == room.auth) {
-    //                     ws.send(JSON.stringify({ success: true }));
-    //                     room.host = room.addConnection(new Host(ws, room, data.appID || "default"));
-    //                     room.state = "open";
-    //                     console.log(room);
-    //                 } else {
-    //                     ws.send(JSON.stringify({ success: false, error: "Invalid auth" }));
-    //                     ws.close();
-    //                 };
-    //             } else if (room.state == "open") {
-    //                 room.addConnection(new Client(ws, room, data.appID || "default"));
-    //                 console.log(room);
-    //             };
-    //         } catch (e) {
-    //             console.error(e);
-    //             ws.send(JSON.stringify({ success: false, error: "Unexpected backend error" }));
-    //             ws.close();
-    //         };
-    //     } catch {
-    //         ws.send(JSON.stringify({ success: false, error: "Expected JSON syntax" }));
-    //         ws.close();
-    //     };
-    // });
 });
 
 server.listen(8080, function () {
