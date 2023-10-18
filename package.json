@@ -9,6 +9,5 @@
   "author": "Electric131",
   "license": "ISC",
   "dependencies": {
-    "robotjs": "^0.6.0"
   }
 }
