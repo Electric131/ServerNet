@@ -47,7 +47,7 @@ var allowedKeys = [
 
 var types = ["press", "release"];
 
-fetch(`http://localhost:8080/newRoom`, {
+fetch(`https://server-net-crasj.ondigitalocean.app/newRoom`, {
     method: "POST",
     headers: {
         "Content-Type": "application/json",
@@ -55,7 +55,7 @@ fetch(`http://localhost:8080/newRoom`, {
     }
 }).then((response) => {
     response.json().then((data) => {
-        let ws = new WebSocket(`ws://localhost:8080/room/${data.id}`);
+        let ws = new WebSocket(`wss://server-net-crasj.ondigitalocean.app/room/${data.id}`);
         ws.on('message', function (msg) {
             msg = JSON.parse(msg.toString());
             if (!msg.from) {
