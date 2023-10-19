@@ -55,7 +55,7 @@ fetch(`https://${process.env.URL}/newRoom`, {
     }
 }).then((response) => {
     response.json().then((data) => {
-        let ws = new WebSocket(`ws://${process.env.URL}/room/${data.id}`);
+        let ws = new WebSocket(`wss://${process.env.URL}/room/${data.id}`);
         ws.on('message', function (msg) {
             msg = JSON.parse(msg.toString());
             if (!msg.from) {
