@@ -47,7 +47,7 @@ var allowedKeys = [
 
 var types = ["press", "release"];
 
-fetch(`https://server-net-crasj.ondigitalocean.app/newRoom`, {
+fetch(`https://${process.env.URL}/newRoom`, {
     method: "POST",
     headers: {
         "Content-Type": "application/json",
@@ -55,7 +55,7 @@ fetch(`https://server-net-crasj.ondigitalocean.app/newRoom`, {
     }
 }).then((response) => {
     response.json().then((data) => {
-        let ws = new WebSocket(`wss://server-net-crasj.ondigitalocean.app/room/${data.id}`);
+        let ws = new WebSocket(`ws://${process.env.URL}/room/${data.id}`);
         ws.on('message', function (msg) {
             msg = JSON.parse(msg.toString());
             if (!msg.from) {
@@ -87,6 +87,7 @@ fetch(`https://server-net-crasj.ondigitalocean.app/newRoom`, {
                                 break;
                             case "disconnect":
                                 console.log("Client disconnected! If this is because they left on their own (not kicked), this could cause problems with mappings!");
+                                if (!clients[msg.data.id]) return;
                                 clients[msg.data.id].held.forEach((val) => {
                                     robot.keyToggle(formatKey(val, clients[msg.data.id].mappings), "up");
                                 });

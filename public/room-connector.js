@@ -32,7 +32,7 @@ class ServerClient {
         return new Promise(async (res, rej) => {
             if (this.ws || this.processing) rej();
             this.processing = true;
-            let ws = new WebSocket(`wss://server-net-crasj.ondigitalocean.app/room/${id}`);
+            let ws = new WebSocket(`wss://${window.location.host}/room/${id}`);
             ws.onmessage = function (msg) {
                 let data = JSON.parse(msg.data);
                 switch (data.event) {

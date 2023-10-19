@@ -93,15 +93,33 @@ class Host extends Connection {
             } else { // auth or appID was not sent
                 this.ws.send(JSON.stringify({ success: false, event: "authenticate", error: { msg: "Either auth key or appID (or both) weren't provided", code: "missingRequired" } }));
             };
-        } else if (this.state == "validated") {
+        } else if (this.state == "authenticated") {
             if (msg.to) {
                 switch (msg.to) {
                     case "system":
-                        this.ws.send(JSON.stringify({ success: true, event: "message" }));
+                        switch (msg.data.action) {
+                            case "kick":
+                                let connection = this.room.findConnection(msg.data.id);
+                                if (connection) {
+                                    this.ws.send(JSON.stringify({ success: true, event: "message" }));
+                                    connection.kill("Kicked by host", "hostKick");
+                                } else {
+                                    this.ws.send(JSON.stringify({ success: false, event: "message", error: { msg: "Invalid client", code: "invalidClient" } }));
+                                };
+                                break;
+                            default:
+                                this.ws.send(JSON.stringify({ success: false, event: "message", error: { msg: "Invalid action", code: "invalidAction" } }));
+                        };
                         break;
                     default:
-                        if (msg.to)
-                        this.ws.send(JSON.stringify({ success: true, event: "message" }));
+                        let connection = this.room.findConnection(msg.to);
+                        console.log(msg.to, connection);
+                        if (msg.to && connection) {
+                            this.ws.send(JSON.stringify({ success: true, event: "message" }));
+                            connection.send("host", msg.data);
+                        } else {
+                            this.ws.send(JSON.stringify({ success: false, event: "message", error: { msg: "Invalid client", code: "invalidClient" } }));
+                        };
                 };
             } else {
                 this.ws.send(JSON.stringify({ success: false, event: "message", error: { msg: "Missing 'to' key (should be 'system' or a client id)", code: "missingReciever" } }));
