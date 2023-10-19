@@ -95,6 +95,7 @@ fetch(`https://${process.env.URL}/newRoom`, {
                                 break;
                         };
                     case "client":
+                        if (!clients[msg.id]) return;
                         if (msg.data.key && clients[msg.id].keys.includes(msg.data.key.toLowerCase()) && msg.data.type && types.includes(msg.data.type)) {
                             if (!clients[msg.id].held.includes(msg.data.key.toLowerCase()) && msg.data.type != "release") {
                                 clients[msg.id].held.push(msg.data.key.toLowerCase());
