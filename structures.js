@@ -9,33 +9,15 @@ class Connection {
         this.state = "waiting";
         this.id = uuid.v4(); // Generate a unique id for this connection
 
-        // Bucket for handling rate limiting
-        this.maxBucketCount = 20; // Max msgs to be sent in the given timeframe (at most)
-        this.bucketTimeframe = 100; // Rate at which bucket regenerates
-        this.bucketCount = this.maxBucketCount; // Regerates bucket every x ms; dictated by bucketTimeFrame
-        // Bucket warns will increase every time connection is rate limited
-        // and will reset every 5s - Connection is kicked if this hits 3
-        this.bucketWarns = 0;
-
         // Websocket bindings
         this.ws.on("message", this.internalMessage.bind(this));
         this.ws.on("open", this.onopen.bind(this));
         this.ws.on("close", this.onclose.bind(this));
         this.ws.on("close", function() { this.state = "closed"; });
 
-        setInterval(function() { if (this.bucketCount < this.maxBucketCount) this.bucketCount++ }.bind(this), this.bucketTimeframe);
-        setInterval(function() { this.bucketWarns = 0 }.bind(this), 5000);
     };
 
     internalMessage(msg) { // Handle checking JSON syntax of message
-        if (this.bucketCount <= 0) {
-            if (this.bucketWarns >= 2) {
-                return this.kill("Rate limit exceeded", "rateExceeded");
-            };
-            this.bucketWarns++;
-            return this.ws.send(JSON.stringify({ success: false, event: "unknown", error: { msg: "Rate limit reached", code: "rateLimited" } }));
-        };
-        this.bucketCount--;
         try {
             let newMsg = JSON.parse(msg.toString());
             this.onmessage(newMsg);

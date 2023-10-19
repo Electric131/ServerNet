@@ -20,6 +20,7 @@ var keys = {
     LETTERS: "qwertyuiopasdfghjklzxcvbnm".split(""),
     NUMS: "0123456789".split(""),
     SYMBOLS: "`~-_=+[{]}\\|;:'\",<.>/?".split(""),
+    NSYMBOLS: "!@#$%^&*()".split(""),
     ARROWS: ["up", "down", "left", "right"],
     WASD: "wasd".split(""),
     SPECIAL: ["backspace", "delete", "enter", "tab", "escape", "home", "end", "pageup", "pagedown", "command", "alt", "shift"],
@@ -42,7 +43,8 @@ var mappings = [
 ];
 
 var allowedKeys = [
-    keys.LETTERS
+    // keys.LETTERS.concat(["enter", "space", "shift", "backspace", "tab"]).concat(keys.NUMS).concat(keys.SYMBOLS).concat(keys.ARROWS).concat(keys.NSYMBOLS)
+    keys.ARROWS.concat(keys.SPACE).concat(["enter"])
 ];
 
 var types = ["press", "release"];
@@ -65,7 +67,8 @@ fetch(`https://${process.env.URL}/newRoom`, {
                             if (msg.role == "host") {
                                 ws.send(JSON.stringify({
                                     auth: data.auth,
-                                    appID: "keyboardTransmitter"
+                                    appID: "keyboardTransmitter",
+                                    password: "cookies"
                                 }));
                             } else {
                                 console.log("Couldn't join as host.");
@@ -96,7 +99,7 @@ fetch(`https://${process.env.URL}/newRoom`, {
                         };
                     case "client":
                         if (!clients[msg.id]) return;
-                        if (msg.data.key && clients[msg.id].keys.includes(msg.data.key.toLowerCase()) && msg.data.type && types.includes(msg.data.type)) {
+                        if (msg.data.key && clients[msg.id].keys.includes(formatKey(msg.data.key.toLowerCase())) && msg.data.type && types.includes(msg.data.type)) {
                             if (!clients[msg.id].held.includes(msg.data.key.toLowerCase()) && msg.data.type != "release") {
                                 clients[msg.id].held.push(msg.data.key.toLowerCase());
                                 robot.keyToggle(formatKey(msg.data.key.toLowerCase(), clients[msg.id].mappings), "down");
