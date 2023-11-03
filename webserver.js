@@ -41,13 +41,13 @@ app.all("/file-transfer/uploadfile", (req, res) => {
                 name = sanitize(name.replaceAll(" ", "-")); // Sanitize file name
                 let path = "./public/file-transfer/downloaded-files/" + name;
                 req.files.filename.mv(path).then(file => { });
-                tempfiles[name] = new Date().getTime() + 60000 * 0.1;
+                tempfiles[name] = new Date().getTime() + 60000 * 5;
                 setTimeout(function (filepath, name) {
                     if (fs.existsSync(filepath)) { // Precaution to ensure file does exist still
                         fs.unlink(filepath, err => { });
                     };
                     delete tempfiles[name];
-                }, 60000 * 0.1, path, name);
+                }, 60000 * 5, path, name);
                 success = true;
                 res.redirect("/file-transfer/upload/?state=success&filename=" + encodeURIComponent(name));
             } catch {};
