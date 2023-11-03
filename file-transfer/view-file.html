@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Remote Connections</title>
+    <body>
+        <h3 id="timer">
+            Time Left*:
+        </h3>
+        * Time might be a couple seconds off<br>
+        <a href="/file-transfer/downloaded-files/${{filename}}" download="${{filename}}">
+            <button type="button">Download</button>
+        </a>
+        <script>
+            const goalTime = eval('${{finalTime}}');
+            function getRemaining() {
+                let time = new Date().getTime();
+                let diff = Math.floor((goalTime - time) / 1000);
+                document.getElementById("timer").innerHTML = "Time Left*: " + `${Math.floor(diff / 60)}:${String("0" + diff % 60).slice(-2)}`;
+                if (diff <= 0) {
+                    window.location.href = '/file-transfer/uploads';
+                };
+            };
+            setInterval(getRemaining, 100);
+        </script>
+    </body>
+</html>
